@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/rs/cors"
 )
 
 type LeaderboardData struct {
@@ -31,8 +33,13 @@ func main() {
 	mux.HandleFunc("/normal", NormalHandler)
 	mux.HandleFunc("/zip", ZipHandler)
 
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost},
+	})
+
 	log.Println("Server listening on http://localhost:8888")
-	http.ListenAndServe(":8888", mux)
+	http.ListenAndServe(":8888", c.Handler(mux))
 }
 
 func NormalHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,14 +88,18 @@ func ZipHandler(w http.ResponseWriter, r *http.Request) {
 	if gzipEnabled {
 		w.WriteHeader(http.StatusOK)
 		gz := gzip.NewWriter(w)
+
+		defer func() {
+			if err := gz.Close(); err != nil {
+				log.Println(err)
+			}
+		}()
+
 		err := json.NewEncoder(gz).Encode(response)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(`{"error": "Error processing action"}`))
 			return
-		}
-		if err := gz.Close(); err != nil {
-			log.Println(err)
 		}
 		return
 	}
@@ -111,4 +122,3 @@ func getData() (*ResponseData, error) {
 	return &res, nil
 
 }
-
